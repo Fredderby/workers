@@ -5,7 +5,7 @@ from workersdata import workers
 
 
 # Set page configuration
-st.set_page_config(page_title="WorkersdclmghApp", page_icon="🟢", layout="centered")
+st.set_page_config(page_title="workersdclmghApp", page_icon="🟢", layout="centered")
 
 with st.container(border=True):
     st.image('./media/workers.jpg')
