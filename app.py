@@ -8,7 +8,7 @@ from workersdata import workers
 st.set_page_config(page_title="workersdclmghApp", page_icon="🟢", layout="centered")
 
 with st.container(border=True):
-    st.image('./media/workers.jpg')
+    st.image('./display/workers.jpg')
     st.markdown("""
                 *NB:All DCLM workers must:*  
                       🗸 *Register their interest for the upcoming retreat*.      
