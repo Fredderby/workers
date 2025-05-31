@@ -1,0 +1,6 @@
+streamlit==1.45.1
+pandas
+gspread
+oauth2client
+python-dotenv
+matplotlib
