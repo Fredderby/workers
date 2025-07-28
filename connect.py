@@ -1,3 +1,4 @@
+
 import os
 from dotenv import load_dotenv
 from oauth2client.service_account import ServiceAccountCredentials
@@ -40,4 +41,3 @@ def cred():
     # Authorize and return the client
     client = gspread.authorize(creds)
     return client
-

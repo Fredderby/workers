@@ -1,6 +1,6 @@
-streamlit==1.45.1
-pandas
+streamlit
 gspread
 oauth2client
 python-dotenv
-matplotlib
+pandas
+rapidfuzz
