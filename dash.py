@@ -70,6 +70,9 @@ class RegistrationDashboard:
                 'Contactinfo': 'Contact',
                 'Contact Info': 'Contact',
                 'Phone': 'Contact',
+                'Mobile': 'Contact',
+                'Phonenumber': 'Contact',
+                'Phone Number': 'Contact',
                 'Designation': 'Designation Level',
                 'Designationlevel': 'Designation Level',
                 'Pos': 'Position',
@@ -115,6 +118,16 @@ class RegistrationDashboard:
                 .str.title()
                 .replace({'Nan': '', 'Na': '', 'None': '', '': ''})
             )
+            
+            # Normalize contact numbers
+            def normalize_contact(contact):
+                contact = str(contact)
+                # Remove all non-digit characters except '+' at start
+                if contact.startswith('+'):
+                    return '+' + re.sub(r'\D', '', contact[1:])
+                return re.sub(r'\D', '', contact)
+            
+            combined_df['Contact'] = combined_df['Contact'].apply(normalize_contact)
             
             return combined_df
         
@@ -187,14 +200,31 @@ class RegistrationDashboard:
                     # Extract search series and convert to string
                     search_series = self.filtered_df[self.search_type].astype(str)
                     
-                    # Get matches using vectorized processing
-                    matches = process.extract(
-                        self.search_term.lower(),
-                        search_series.str.lower(),
-                        scorer=fuzz.partial_ratio,
-                        score_cutoff=80,
-                        limit=None
-                    )
+                    # Normalize search term
+                    search_term = str(self.search_term).strip()
+                    
+                    # Special handling for contact numbers
+                    if self.search_type == 'Contact':
+                        # Remove non-digit characters from search term
+                        search_term = re.sub(r'\D', '', search_term)
+                        
+                        # Get matches using vectorized processing with token set ratio
+                        matches = process.extract(
+                            search_term,
+                            search_series,
+                            scorer=fuzz.token_set_ratio,
+                            score_cutoff=70,  # Lower threshold for partial matches
+                            limit=None
+                        )
+                    else:
+                        # Get matches using vectorized processing for names
+                        matches = process.extract(
+                            search_term.lower(),
+                            search_series.str.lower(),
+                            scorer=fuzz.partial_ratio,
+                            score_cutoff=80,
+                            limit=None
+                        )
                     
                     if matches:
                         # Create DataFrame from matches
@@ -225,7 +255,7 @@ class RegistrationDashboard:
 
             # Display results
             if not self.filtered_df.empty:
-                display_cols = ['Name', 'Gender', 'Region', 'Position', 'Registration Status']
+                display_cols = ['Name', 'Gender', 'Region', 'Position', 'Contact', 'Registration Status']
                 
                 # Prepare dataframe to display - show "Unconfirmed" for empty status
                 display_df = self.filtered_df[display_cols].copy()
