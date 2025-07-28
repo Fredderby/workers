@@ -5,6 +5,7 @@ from rapidfuzz import process, fuzz
 from connect import cred
 import gspread
 import time
+import re
 
 class RegistrationDashboard:
     def __init__(self):
@@ -48,9 +49,15 @@ class RegistrationDashboard:
                 st.stop()
                 
             # Normalize column names - handle variations
-            combined_df.columns = [col.strip().title().replace('  ', ' ') for col in combined_df.columns]
+            def normalize_col_name(col):
+                col = str(col).strip()
+                col = re.sub(r'[^a-zA-Z0-9\s]', ' ', col)  # Replace special chars with space
+                col = re.sub(r'\s+', ' ', col)  # Collapse multiple spaces
+                return col.title().strip()
             
-            # Map common variants to standard column names
+            combined_df.columns = [normalize_col_name(col) for col in combined_df.columns]
+            
+            # Enhanced column mapping with fuzzy matching
             column_mapping = {
                 'Regstatus': 'Registration Status',
                 'Reg Status': 'Registration Status',
@@ -102,15 +109,12 @@ class RegistrationDashboard:
                     combined_df[col] = combined_df[col].astype(str)
             
             # Convert registration status to consistent format
-            if 'Registration Status' in combined_df.columns:
-                combined_df['Registration Status'] = (
-                    combined_df['Registration Status']
-                    .str.strip()
-                    .str.title()
-                    .replace({'Nan': '', 'Na': '', 'None': '', '': ''})
-                )
-            else:
-                combined_df['Registration Status'] = ''
+            combined_df['Registration Status'] = (
+                combined_df['Registration Status']
+                .str.strip()
+                .str.title()
+                .replace({'Nan': '', 'Na': '', 'None': '', '': ''})
+            )
             
             return combined_df
         
@@ -155,9 +159,6 @@ class RegistrationDashboard:
     def build_filters(self):
         st.subheader("🔍 Participant Search")
         with st.container(border=True):
-            # Create two columns layout
-            filter_col1, filter_col2 = st.columns([1, 1])
-            
             # Region filter - always shown at top
             region_options = ['All Regions'] + sorted(self.df['Region'].dropna().unique().tolist())
             selected_region = st.selectbox("Filter by Region:", region_options)
@@ -173,11 +174,12 @@ class RegistrationDashboard:
             with col2:
                 self.search_term = st.text_input("Search term:", placeholder=f"Enter {self.search_type} to search")
             
-            # Apply region filter first
+            # Start with the full dataset
+            self.filtered_df = self.df.copy()
+            
+            # Apply region filter if needed
             if selected_region != 'All Regions':
-                self.filtered_df = self.df[self.df['Region'] == selected_region].copy()
-            else:
-                self.filtered_df = self.df.copy()
+                self.filtered_df = self.filtered_df[self.filtered_df['Region'] == selected_region]
             
             # Apply search filter if search term is provided
             if self.search_term:
@@ -202,10 +204,13 @@ class RegistrationDashboard:
                         self.filtered_df = self.filtered_df.assign(match_score=match_df['score'].values)
                         self.filtered_df = self.filtered_df.sort_values('match_score', ascending=False)
                     else:
-                        self.filtered_df = pd.DataFrame()  # No matches found
+                        # Create empty DataFrame with same columns
+                        self.filtered_df = pd.DataFrame(columns=self.df.columns)
                         
                 except Exception as e:
                     st.error(f"Search error: {str(e)}")
+                    # Create empty DataFrame with same columns
+                    self.filtered_df = pd.DataFrame(columns=self.df.columns)
     
     def display_results(self):
         st.subheader(f"👥 Participants ({len(self.filtered_df)})")
