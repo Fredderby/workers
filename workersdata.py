@@ -78,11 +78,30 @@ def workers():
                 name.title(),
                 gender,
                 position.title(),
-                contact
+                contact,
+                "Confirmed",  # Add Registration Status
+                datetime.now().strftime("%a %d %b, %H:%M")  # Add Confirmation Time
             ]
 
             try:
+                # Get current headers to ensure we have the correct columns
+                current_headers = worksheet.row_values(1)
+                required_headers = [
+                    "Date", "Region", "Division", "Designation Level", 
+                    "Name", "Gender", "Position", "Contact", 
+                    "Registration Status", "Confirmation Time"
+                ]
+                
+                # Add missing columns if needed
+                missing_headers = [h for h in required_headers if h not in current_headers]
+                if missing_headers:
+                    # Add missing headers to the worksheet
+                    new_headers = current_headers + missing_headers
+                    worksheet.update('A1', [new_headers])
+                
+                # Append the new registration
                 worksheet.append_row(wk_regis)
+                
                 st.success("✅ Successfully Submitted!")
                 st.balloons()
             except Exception as e:

@@ -10,7 +10,7 @@ import re
 class RegistrationDashboard:
     def __init__(self):
         self.client = self.get_google_client()
-        self.national_ws, self.manual_ws = self.get_worksheets()
+        self.national_ws = self.get_worksheet()
         self.df = self.load_and_clean_data()
     
     @st.cache_resource(show_spinner="Connecting to Google Sheets...")
@@ -21,13 +21,12 @@ class RegistrationDashboard:
             st.error(f"Connection initialization failed: {e}")
             st.stop()
     
-    def get_worksheets(self):
+    def get_worksheet(self):
         try:
             spreadsheet = self.client.open("mini_congress")
             national_ws = spreadsheet.worksheet("national_wk")
-            manual_ws = spreadsheet.worksheet("manual_wk")
             st.success("Database Connected!")
-            return national_ws, manual_ws
+            return national_ws
         except Exception as e:
             st.error(f"Worksheet access failed: {e}")
             st.stop()
@@ -35,16 +34,11 @@ class RegistrationDashboard:
     @st.cache_data(ttl=60, show_spinner="Loading participant data...")
     def load_and_clean_data(_self):
         try:
-            # Load both worksheets
-            national_records = _self.national_ws.get_all_records()
-            manual_records = _self.manual_ws.get_all_records()
+            # Load worksheet
+            records = _self.national_ws.get_all_records()
+            df = pd.DataFrame(records)
             
-            # Create DataFrames and combine
-            national_df = pd.DataFrame(national_records)
-            manual_df = pd.DataFrame(manual_records)
-            combined_df = pd.concat([national_df, manual_df], ignore_index=True)
-            
-            if combined_df.empty:
+            if df.empty:
                 st.error("No data found in the Google Sheets")
                 st.stop()
                 
@@ -55,7 +49,7 @@ class RegistrationDashboard:
                 col = re.sub(r'\s+', ' ', col)  # Collapse multiple spaces
                 return col.title().strip()
             
-            combined_df.columns = [normalize_col_name(col) for col in combined_df.columns]
+            df.columns = [normalize_col_name(col) for col in df.columns]
             
             # Enhanced column mapping with fuzzy matching
             column_mapping = {
@@ -84,7 +78,7 @@ class RegistrationDashboard:
             }
             
             # Apply column name mapping
-            combined_df.rename(columns=column_mapping, inplace=True)
+            df.rename(columns=column_mapping, inplace=True)
             
             # Add default columns if missing
             required_columns = {
@@ -100,20 +94,20 @@ class RegistrationDashboard:
             }
             
             for col, default_val in required_columns.items():
-                if col not in combined_df.columns:
-                    combined_df[col] = default_val
+                if col not in df.columns:
+                    df[col] = default_val
             
             # Convert all columns to string to avoid ArrowTypeError
             text_columns = ['Region', 'Division', 'Designation Level', 'Name', 
                            'Gender', 'Position', 'Contact', 'Registration Status']
             
             for col in text_columns:
-                if col in combined_df.columns:
-                    combined_df[col] = combined_df[col].astype(str)
+                if col in df.columns:
+                    df[col] = df[col].astype(str)
             
             # Convert registration status to consistent format
-            combined_df['Registration Status'] = (
-                combined_df['Registration Status']
+            df['Registration Status'] = (
+                df['Registration Status']
                 .str.strip()
                 .str.title()
                 .replace({'Nan': '', 'Na': '', 'None': '', '': ''})
@@ -127,9 +121,9 @@ class RegistrationDashboard:
                     return '+' + re.sub(r'\D', '', contact[1:])
                 return re.sub(r'\D', '', contact)
             
-            combined_df['Contact'] = combined_df['Contact'].apply(normalize_contact)
+            df['Contact'] = df['Contact'].apply(normalize_contact)
             
-            return combined_df
+            return df
         
         except Exception as e:
             st.error(f"Data loading failed: {e}")
@@ -321,8 +315,8 @@ class RegistrationDashboard:
                         self.df.at[idx, 'Registration Status'] = 'Confirmed'
                         self.df.at[idx, 'Confirmation Time'] = datetime.now().strftime("%a %d %b, %H:%M")
                         
-                        # Update Google Sheets - both original worksheets
-                        self.update_source_worksheets()
+                        # Update Google Sheets
+                        self.update_source_worksheet()
                         
                         # Clear cache to force refresh
                         st.cache_data.clear()
@@ -428,7 +422,7 @@ class RegistrationDashboard:
                         self.df.at[idx, 'Confirmation Time'] = datetime.now().strftime("%a %d %b, %H:%M")
                     
                     # Update Google Sheets
-                    self.update_source_worksheets()
+                    self.update_source_worksheet()
                     
                     # Clear cache to force refresh
                     st.cache_data.clear()
@@ -440,47 +434,24 @@ class RegistrationDashboard:
                 except Exception as e:
                     st.error(f"Bulk confirmation failed: {str(e)}")
     
-    def update_source_worksheets(self):
-        """Update both source worksheets with cleaned data"""
+    def update_source_worksheet(self):
+        """Update the worksheet with cleaned data"""
         try:
-            # Get original record counts
-            national_records = self.national_ws.get_all_records()
-            manual_records = self.manual_ws.get_all_records()
-            
-            # Split dataframe using original counts
-            national_count = len(national_records)
-            manual_count = len(manual_records)
-            
-            # Ensure we don't go beyond dataframe length
-            if len(self.df) < national_count + manual_count:
-                # Handle case where dataframe is smaller than expected
-                national_df = self.df.iloc[:min(national_count, len(self.df))].copy()
-                manual_df = self.df.iloc[min(national_count, len(self.df)):].copy()
-            else:
-                national_df = self.df.iloc[:national_count].copy()
-                manual_df = self.df.iloc[national_count:national_count+manual_count].copy()
-            
-            # Remove temporary columns before updating
-            for df in [national_df, manual_df]:
-                if 'match_score' in df.columns:
-                    df.drop(columns=['match_score'], inplace=True)
+            # Remove temporary columns
+            df_to_update = self.df.copy()
+            if 'match_score' in df_to_update.columns:
+                df_to_update = df_to_update.drop(columns=['match_score'])
             
             # Convert all text columns to string before updating
             text_columns = ['Region', 'Division', 'Designation Level', 'Name', 
                            'Gender', 'Position', 'Contact', 'Registration Status']
             for col in text_columns:
-                if col in national_df.columns:
-                    national_df[col] = national_df[col].astype(str)
-                if col in manual_df.columns:
-                    manual_df[col] = manual_df[col].astype(str)
+                if col in df_to_update.columns:
+                    df_to_update[col] = df_to_update[col].astype(str)
             
-            # Update national worksheet
+            # Update the worksheet
             self.national_ws.clear()
-            self.national_ws.update([national_df.columns.tolist()] + national_df.values.tolist())
-            
-            # Update manual worksheet
-            self.manual_ws.clear()
-            self.manual_ws.update([manual_df.columns.tolist()] + manual_df.values.tolist())
+            self.national_ws.update([df_to_update.columns.tolist()] + df_to_update.values.tolist())
             
         except Exception as e:
             st.error(f"Worksheet update failed: {str(e)}")
