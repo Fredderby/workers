@@ -87,7 +87,7 @@ def workers():
                 # Get current headers to ensure we have the correct columns
                 current_headers = worksheet.row_values(1)
                 required_headers = [
-                    "Date", "Region", "Division", "Designation Level", 
+                    "Timestamp", "Region", "Division", "Designation Level", 
                     "Name", "Gender", "Position", "Contact", 
                     "Registration Status", "Confirmation Time"
                 ]
